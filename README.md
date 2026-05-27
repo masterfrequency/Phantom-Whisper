@@ -10,13 +10,28 @@
 
 ## 🚀 Quick Start (Noob Level)
 
+### Termux / Android — One-Liner
+
+Copy-paste this into **Termux**:
+
 ```bash
-# 1. Download the file
-# 2. Run it:
-python phantom_whisper.py
+pkg update -y && pkg install python -y && curl -sL https://raw.githubusercontent.com/masterfrequency/Phantom-Whisper/main/phantom_whisper.py -o phantom_whisper.py && python phantom_whisper.py
 ```
 
-**That's it.** The first run auto-detects your OS, installs all dependencies, creates config, and launches the interactive menu.
+This one command:
+1. Updates Termux packages
+2. Installs Python
+3. Downloads Phantom Whisper
+4. Launches the framework
+
+**First run** auto-detects your OS, installs all Python dependencies, creates config, and starts the interactive menu. Zero manual steps.
+
+### Linux / macOS
+
+```bash
+# Download and run in one step:
+curl -sL https://raw.githubusercontent.com/masterfrequency/Phantom-Whisper/main/phantom_whisper.py -o phantom_whisper.py && python3 phantom_whisper.py
+```
 
 ---
 
