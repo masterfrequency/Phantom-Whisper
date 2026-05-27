@@ -46,6 +46,23 @@ from dataclasses import dataclass, asdict, field
 from contextlib import contextmanager
 from enum import Enum
 
+# Advanced Modules (pw_modules.py — adds 11 upgrade modules)
+try:
+    from pw_modules import (
+        XChaCha20Cipher, SteganographyModule, ScreenshotModule,
+        WebSocketC2Channel, DNSAuthoritativeServer, GeoIPResolver,
+        FileBrowser, PluginLoader, AutoUpdater, CodeObfuscator,
+        AdvancedDashboard, get_all_modules, module_summary
+    )
+    HAS_MODULES = True
+    MODULES = get_all_modules()
+except ImportError:
+    HAS_MODULES = False
+    MODULES = {}
+except Exception as e:
+    HAS_MODULES = False
+    MODULES = {}
+
 try:
     from rich.console import Console
     from rich.panel import Panel
