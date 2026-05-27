@@ -154,66 +154,78 @@ COLORS = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def create_header():
-    """Generate beautiful ASCII art header"""
+    """Generate robust, compact ASCII art header for Termux"""
     ascii_art = r"""
-   ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
-   ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
-   ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
-   ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
-   ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
-   ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
-
-   ██╗    ██╗██╗  ██╗██╗███████╗██████╗ ███████╗██████╗
-   ██║    ██║██║  ██║██║██╔════╝██╔══██╗██╔════╝██╔══██╗
-   ██║ █╗ ██║███████║██║███████╗██████╔╝█████╗  ██████╔╝
-   ██║███╗██║██╔══██║██║╚════██║██╔═══╝ ██╔══╝  ██╔══██╗
-   ╚███╔███╔╝██║  ██║██║███████║██║     ███████╗██║  ██║
-    ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝
+    ____  _                      __                   
+   / __ \/ /_  ____ _____  / /_____  ____ ___ 
+  / /_/ / __ \/ __ `/ __ \/ __/ __ \/ __ `__ \
+ / ____/ / / / /_/ / / / / /_/ /_/ / / / / / /
+/_/   /_/ /_/\__,_/_/ /_/\__/\____/_/ /_/ /_/ 
+ _       ____     _                           
+| |     / / /_   (_)____ ____  ___  _____     
+| | /| / / __ \ / / ___/ __ \/ _ \/ ___/     
+| |/ |/ / / / // (__  ) /_/ /  __/ /         
+|__/|__/_/ /_//_/____/ .___/\___/_/          
+                    /_/                       
     """
     header_text = Text(ascii_art, style="bold cyan")
-    header_text.append("\n" + " " * 15 + "Ultimate Android Red Team Framework 2026", style="bold yellow")
-    header_text.append("\n" + " " * 18 + "v" + VERSION, style="bold magenta")
+    header_text.append("\n" + "—" * 40, style="dim magenta")
+    header_text.append("\n" + "RED TEAM FRAMEWORK 2026", style="bold yellow")
+    header_text.append(f" | v{VERSION}", style="bold magenta")
     
     return Panel(
         Align.center(header_text),
         border_style="bright_magenta",
-        box=box.ROUNDED,
-        padding=(1, 2)
+        box=box.MINIMAL,
+        padding=(0, 1)
     )
 
 def create_info_box():
-    """Create a horizontal info box with framework features"""
+    """Create a clean, compact info grid for Termux"""
+    grid = Table.grid(expand=True)
+    grid.add_column(justify="center")
+    
     features = [
-        "🎭 AI Phishing", "🌐 Multi-C2", "📱 Persistence", 
-        "🔓 Credentials", "🕵️ Recon", "🧠 AI Agent"
+        "[cyan]🎭 AI Phishing[/]", "[cyan]🌐 Multi-C2[/]", "[cyan]📱 Persistence[/]",
+        "[cyan]🔓 Credentials[/]", "[cyan]🕵️ Recon[/]", "[cyan]🧠 AI Agent[/]"
     ]
-    info_text = " • ".join(features)
+    
+    # Split features into two rows for better mobile fit
+    grid.add_row(" • ".join(features[:3]))
+    grid.add_row(" • ".join(features[3:]))
+    
     return Panel(
-        Align.center(Text(info_text, style="bold cyan")),
-        title="[bold magenta]Capabilities[/bold magenta]",
+        grid,
+        title="[bold magenta]CAPABILITIES[/bold magenta]",
         border_style="magenta",
-        box=box.ROUNDED
+        box=box.ROUNDED,
+        padding=(0, 1)
     )
 
 def create_menu():
-    """Create interactive menu optimized for Termux width"""
-    menu = Table(show_header=False, box=box.SIMPLE, border_style="cyan", padding=(0, 2))
+    """Create a simple, centered menu that won't break on narrow screens"""
+    menu = Table(show_header=False, box=None, padding=(0, 1))
     menu.add_column("Option", style="bold bright_white", justify="right")
     menu.add_column("Action", style="bright_cyan")
     
-    menu.add_row("[1]", "Social Engineering")
-    menu.add_row("[2]", "Establish C2")
-    menu.add_row("[3]", "Device Persistence")
-    menu.add_row("[4]", "Credential Harvest")
-    menu.add_row("[5]", "Reconnaissance")
-    menu.add_row("[6]", "Autonomous Mode")
-    menu.add_row("[7]", "Exfiltration")
-    menu.add_row("[8]", "Lateral Movement")
-    menu.add_row("[9]", "Configuration")
-    menu.add_row("[A]", "Setup Environment")
-    menu.add_row("[0]", "Exit")
+    options = [
+        ("1", "Social Engineering"), ("2", "Establish C2"),
+        ("3", "Device Persistence"), ("4", "Credential Harvest"),
+        ("5", "Reconnaissance"), ("6", "Autonomous Mode"),
+        ("7", "Exfiltration"), ("8", "Lateral Movement"),
+        ("9", "Configuration"), ("A", "Setup Environment"),
+        ("0", "Exit")
+    ]
     
-    return Panel(menu, title="[bold cyan]Main Menu[/bold cyan]", border_style="cyan", expand=False)
+    for opt, action in options:
+        menu.add_row(f"[{opt}]", action)
+    
+    return Panel(
+        Align.center(menu),
+        title="[bold cyan]MAIN MENU[/bold cyan]",
+        border_style="cyan",
+        expand=True
+    )
 
 def show_banner():
     """Display animated startup banner"""
