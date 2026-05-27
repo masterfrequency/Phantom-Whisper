@@ -1009,23 +1009,22 @@ class App:
         self.scanner = PortScanner(); self.c2 = C2Server(); self.plugins.scan()
 
     def _header(self) -> Text:
-        ascii_art = r"""
-    ____  _                      __                   
-   / __ \/ /_  ____ _____  / /_____  ____ ___ 
-  / /_/ / __ \/ __ `/ __ \/ __/ __ \/ __ `__ \
- / ____/ / / / /_/ / / / / /_/ /_/ / / / / / /
-/_/   /_/ /_/\__,_/_/ /_/\__/\____/_/ /_/ /_/ 
- _       ____     _                           
-| |     / / /_   (_)____ ____  ___  _____     
-| | /| / / __ \ / / ___/ __ \/ _ \/ ___/     
-| |/ |/ / / / // (__  ) /_/ /  __/ /         
-|__/|__/_/ /_//_/____/ .___/\___/_/          
-                    /_/                       
-        """
-        t = Text(ascii_art, style="bold cyan")
-        t.append("\n" + "—" * 40, style="dim magenta")
-        t.append("\n" + "RED TEAM FRAMEWORK 2026", style="bold yellow")
-        t.append(f" | v{VERSION}", style="bold magenta")
+        t=Text()
+        t.append("╔════════════════════════════════════════════════════════════╗\n",style="bold magenta")
+        t.append("║                                                            ║\n",style="bold magenta")
+        t.append("║        ██████  ██   ██  █████   ███    ██  ██████  ███    ██  ║\n",style="bold magenta")
+        t.append("║        ██   ██ ██   ██ ██   ██ ████   ██ ██      ████   ██  ║\n",style="bright_cyan")
+        t.append("║        ██████  ███████ ███████ ██ ██  ██ ██      ██ ██  ██  ║\n",style="bold magenta")
+        t.append("║        ██      ██   ██ ██   ██ ██  ██ ██ ██      ██  ██ ██  ║\n",style="bright_cyan")
+        t.append("║        ██      ██   ██ ██   ██ ██   ████  ██████ ██   ████  ║\n",style="bold magenta")
+        t.append("║                                                            ║\n",style="bold magenta")
+        t.append("║        ██    ██ ██   ██ ██ ██████  ██████  ██████  ██████   ║\n",style="bright_cyan")
+        t.append("║        ██    ██ ██   ██ ██ ██   ██ ██   ██ ██   ██ ██   ██  ║\n",style="bold magenta")
+        t.append("║        ██    ██ ███████ ██ ██████  ██████  ██████  ██████   ║\n",style="bright_cyan")
+        t.append("║         ██████  ██   ██ ██ ██      ██   ██ ██   ██ ██   ██  ║\n",style="bold magenta")
+        t.append("║                                                            ║\n",style="bold magenta")
+        t.append(f"║                    v{VERSION} — ONE FILE TO RULE                     ║\n",style="cyan")
+        t.append("╚════════════════════════════════════════════════════════════╝\n",style="bold magenta")
         return t
 
     def _info(self) -> Panel:
@@ -1231,11 +1230,11 @@ class App:
             else: config.set(key,nv); console.print(f"[green]✓ {key}={nv}[/green]")
 
     async def run(self):
-        console.clear(); console.print(Align.center(self._header())); console.print()
+        console.clear(); console.print(self._header()); console.print()
         while True:
             console.print(); console.print(self._info()); console.print(); console.print(Align.center(self._menu())); console.print()
             c=Prompt.ask("[bold cyan]Select[/bold cyan]",choices=['0','1','2','3','4','5','6','7','8','9','S','s','P','p','U','u','C','c','A','a'],default='0')
-            console.clear(); console.print(Align.center(self._header())); console.print()
+            console.clear(); console.print(self._header()); console.print()
             if c=='0': break
             elif c.lower()=='a': self._persist()
             elif c=='1': self._phishing()
@@ -1261,6 +1260,7 @@ def main():
     parser = argparse.ArgumentParser(description=f"Phantom Whisper v{VERSION}")
     parser.add_argument("--server", action="store_true", help="Run C2 server")
     parser.add_argument("--install", action="store_true", help="Install deps and exit")
+    parser.add_argument("--set-up", action="store_true", help="Alias for --install")
     parser.add_argument("--recon", action="store_true", help="One-shot recon")
     parser.add_argument("--no-install", action="store_true", help="Skip auto-install")
     args = parser.parse_args()
@@ -1268,7 +1268,7 @@ def main():
     if not args.no_install and not _verify_install():
         auto_install(force=True)
 
-    if args.install:
+    if args.install or args.set_up:
         console.print("[bold green]✓ Installation complete[/bold green]"); return
 
     if args.server:
