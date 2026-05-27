@@ -171,26 +171,39 @@ def create_header():
         box=box.DOUBLE
     )
 
+def create_info_box():
+    """Create a horizontal info box with framework features"""
+    features = [
+        "🎭 AI Phishing", "🌐 Multi-C2", "📱 Persistence", 
+        "🔓 Credentials", "🕵️ Recon", "🧠 AI Agent"
+    ]
+    info_text = " • ".join(features)
+    return Panel(
+        Align.center(Text(info_text, style="bold cyan")),
+        title="[bold magenta]Capabilities[/bold magenta]",
+        border_style="magenta",
+        box=box.ROUNDED
+    )
+
 def create_menu():
-    """Create interactive menu with cyberpunk aesthetic"""
-    menu = Table(show_header=False, box=box.ROUNDED, border_style="cyan")
-    menu.add_column("Icon", style="bright_cyan", width=6)
-    menu.add_column("Option", style="bright_white", width=30)
-    menu.add_column("Description", style="dim white")
+    """Create interactive menu optimized for Termux width"""
+    menu = Table(show_header=False, box=box.SIMPLE, border_style="cyan", padding=(0, 2))
+    menu.add_column("Option", style="bold bright_white", justify="right")
+    menu.add_column("Action", style="bright_cyan")
     
-    menu.add_row("🎭", "[1] Social Engineering", "AI-powered phishing & pretexting")
-    menu.add_row("🌐", "[2] Establish C2", "Multi-protocol command & control")
-    menu.add_row("📱", "[3] Device Persistence", "Install covert persistence mechanisms")
-    menu.add_row("🔓", "[4] Credential Harvest", "Extract passwords & tokens")
-    menu.add_row("🕵️", "[5] Reconnaissance", "Advanced device & network recon")
-    menu.add_row("🧠", "[6] Autonomous Mode", "Self-operating red team agent")
-    menu.add_row("📡", "[7] Exfiltration", "Covert data exfiltration channels")
-    menu.add_row("🎯", "[8] Lateral Movement", "Spread to other devices")
-    menu.add_row("⚙️", "[9] Configuration", "C2 settings & encryption keys")
-    menu.add_row("🚀", "[A] Setup Environment", "Configure DNS & Termux autostart")
-    menu.add_row("❌", "[0] Exit", "Clean shutdown")
+    menu.add_row("[1]", "Social Engineering")
+    menu.add_row("[2]", "Establish C2")
+    menu.add_row("[3]", "Device Persistence")
+    menu.add_row("[4]", "Credential Harvest")
+    menu.add_row("[5]", "Reconnaissance")
+    menu.add_row("[6]", "Autonomous Mode")
+    menu.add_row("[7]", "Exfiltration")
+    menu.add_row("[8]", "Lateral Movement")
+    menu.add_row("[9]", "Configuration")
+    menu.add_row("[A]", "Setup Environment")
+    menu.add_row("[0]", "Exit")
     
-    return Panel(menu, title="[bold cyan]Main Menu[/bold cyan]", border_style="cyan")
+    return Panel(menu, title="[bold cyan]Main Menu[/bold cyan]", border_style="cyan", expand=False)
 
 def show_banner():
     """Display animated startup banner"""
@@ -446,7 +459,8 @@ class PhantomWhisper:
         
         while True:
             console.print()
-            console.print(create_menu())
+            console.print(create_info_box())
+            console.print(Align.center(create_menu()))
             console.print()
             
             choice = Prompt.ask(
