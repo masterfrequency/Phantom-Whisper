@@ -15,7 +15,7 @@
 Copy-paste this into **Termux**:
 
 ```bash
-pkg update -y && pkg install git python -y && git clone https://github.com/masterfrequency/Phantom-Whisper.git && cd Phantom-Whisper && pip install rich requests cryptography dnspython && python phantom_whisper.py --setup && python phantom_whisper.py
+pkg update -y && pkg install git python -y && git clone https://github.com/masterfrequency/Phantom-Whisper.git && cd Phantom-Whisper && python phantom_whisper.py --set-up && python phantom_whisper.py
 ```
 
 This one command:
