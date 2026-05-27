@@ -799,10 +799,27 @@ class Persist:
         self.is_termux = "com.termux" in os.environ.get("PREFIX","")
     def bashrc(self, script: str) -> bool:
         try:
-            b = HOME/".bashrc"; entry = f"\n# Phantom Whisper\nif [ -f {script} ] && [ -z \"$PW_RUNNING\" ]; then export PW_RUNNING=1; python {script} &; fi\n"
-            if b.exists():
-                if "Phantom Whisper" not in b.read_text(): b.write_text(b.read_text()+entry)
-            else: b.write_text(entry)
+            b = HOME/".bashrc"; script_path = Path(script).absolute()
+            # 1. Add alias for easy access
+            alias_entry = f"\nalias phantom='python3 {script_path}'\n"
+            # 2. Add auto-start entry (optional, but keeping it as requested)
+            autostart_entry = f"\n# Phantom Whisper Auto-Start\nif [ -f {script_path} ] && [ -z \"$PW_RUNNING\" ]; then export PW_RUNNING=1; python3 {script_path} &; fi\n"
+            
+            content = b.read_text() if b.exists() else ""
+            if "alias phantom=" not in content: content += alias_entry
+            if "# Phantom Whisper Auto-Start" not in content: content += autostart_entry
+            
+            b.write_text(content)
+            
+            # Also try to create a symlink in /usr/local/bin if possible (Linux) or ~/../usr/bin (Termux)
+            try:
+                bin_dir = Path(os.environ.get("PREFIX", "/usr/local")) / "bin"
+                link_path = bin_dir / "phantom"
+                if not link_path.exists():
+                    subprocess.run(["ln", "-s", str(script_path), str(link_path)], capture_output=True)
+                    subprocess.run(["chmod", "+x", str(link_path)], capture_output=True)
+            except: pass
+            
             return True
         except: return False
     def termux_boot(self, script: str) -> bool:
@@ -1042,7 +1059,7 @@ class App:
         m.add_row("[bold cyan]P.[/bold cyan]","[white]Plugins[/white]","[dim]Manage & Run Extensions[/dim]")
         m.add_row("[bold cyan]U.[/bold cyan]","[white]Update[/white]","[dim]Check for New Versions[/dim]")
         m.add_row("[bold cyan]C.[/bold cyan]","[white]Configuration[/white]","[dim]Edit Settings[/dim]")
-        m.add_row("[bold cyan]A.[/bold cyan]","[white]Termux Setup[/white]","[dim]Install Environment[/dim]")
+        m.add_row("[bold cyan]A.[/bold cyan]","[white]Termux Setup[/white]","[dim]Install Env & 'phantom' command[/dim]")
         m.add_row("[bold red]0.[/bold red]","[white]Exit[/white]","[dim]Shutdown Framework[/dim]")
         return m
 
