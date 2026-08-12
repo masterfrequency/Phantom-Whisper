@@ -120,7 +120,7 @@ Dashboard features: real-time agent feed, activity chart, live exfil stream, aut
 ## 🏗️ Architecture
 
 ```
-phantom_whisper.py (77 KB)
+phantom_whisper.py (83 KB)
 ├── Auto-Installer (detects OS, installs deps, creates config)
 ├── Crypto Layer (XChaCha20-Poly1305 + PBKDF2 x600k)
 ├── C2 Clients (DNS tunnel, HTTP mimic, WebSocket)

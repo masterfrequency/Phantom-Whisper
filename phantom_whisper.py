@@ -60,10 +60,20 @@ INSTALL_FLAG = CONFIG_DIR / ".installed"
 
 def _pip_install(pkg: str) -> bool:
     try:
-        r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", pkg],
-                           capture_output=True, timeout=120)
-        return r.returncode == 0
-    except: return False
+        # Bootstrap pip if the interpreter ships without it (minimal distros)
+        probe = subprocess.run([sys.executable, "-m", "pip", "--version"],
+                               capture_output=True, timeout=30)
+        if probe.returncode != 0:
+            subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"],
+                           capture_output=True, timeout=60)
+        # Plain install, then --user, then --break-system-packages (PEP 668 distros)
+        for extra in ([], ["--user"], ["--break-system-packages"]):
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", *extra, pkg],
+                               capture_output=True, timeout=180)
+            if r.returncode == 0:
+                return True
+    except: pass
+    return False
 
 def _check_import(mod: str) -> bool:
     try:
