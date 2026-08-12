@@ -111,9 +111,25 @@ Dashboard features: real-time agent feed, activity chart, live exfil stream, aut
 
 ---
 
-## 🔧 Screenshots
+## 🧪 Verification
 
-*(Insert screenshots of the menu, C2 dashboard)*
+Run the self-contained test suite (no network required, all loopback):
+
+```bash
+python3 tests/test_phantom.py
+```
+
+Covers: imports, crypto roundtrip + tamper rejection, plugin loading,
+HTTP-mimic headers, and a full C2 boot with encrypted beacon → agent
+registry → command queue → exfil. Exits non-zero on any failure.
+
+Manual smoke test:
+
+```bash
+python3 phantom_whisper.py --server     # start C2
+curl http://127.0.0.1:8080/api/v1/dashboard   # dashboard
+curl http://127.0.0.1:8080/api/v1/status      # server stats
+```
 
 ---
 
@@ -144,3 +160,4 @@ Unauthorized access to computer systems is illegal. Always obtain proper written
 
 - **Author:** masterfrequency / PhonkAlphabet 🇭🇷
 - **Version:** 2.0.0 — Monolithic Ultimate Edition
+- **License:** MIT (see `LICENSE`)

@@ -1,0 +1,13 @@
+# Phantom Whisper — core dependencies (auto-installed on first run)
+rich>=13.0
+requests>=2.28
+cryptography>=41.0
+dnspython>=2.4
+
+# Optional feature modules — framework degrades gracefully if missing:
+#   pycryptodome : XChaCha20-Poly1305 encryption
+#   websockets   : WebSocket C2 channel
+#   pillow       : PNG steganography
+#   mss          : screenshot capture
+#   pynput       : clipboard/keyboard monitoring
+#   aiohttp      : async HTTP helpers
